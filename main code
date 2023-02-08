@@ -11,6 +11,10 @@ Loads = elec_loads['Consumer_0'].tolist()
 sun = radiation['Radiation (W/mÂ²)'].tolist()
 wind = wind_speed['Wind speed (m/s)'].tolist()
 
+Loads = Loads[0:30]
+sun = sun[0:30]
+wind = wind[0:30]
+
 pv_efficiency = 0.7
 pv_area = 1
 pv_number = 40
@@ -91,6 +95,7 @@ model.bat_cost = pe.Var(domain=pe.NonNegativeReals)
 '''fuel cell'''
 
 model.fc_use_factor = pe.Var(model.time, domain=pe.NonNegativeReals, bounds=(fc_MPL, 1))
+model.fc_power_part = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.fc_power = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.fc_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.fc_on = pe.Var(model.time, domain=pe.Binary)
@@ -104,6 +109,7 @@ model.fc_cost = pe.Var(domain=pe.NonNegativeReals)
 '''water electrolyser'''
 
 model.we_use_factor = pe.Var(model.time, domain=pe.NonNegativeReals, bounds=(we_MPL, 1))
+model.we_power_part = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.we_power = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.we_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.we_on = pe.Var(model.time, domain=pe.Binary)
@@ -196,15 +202,19 @@ def fc_SB_power_fraction(model):
 model.fc_SB_power_fraction = pe.Constraint(rule=fc_SB_power_fraction)
 
 def fc_off_power_fraction(model):
-    return model.fc_off_power == fc_off_to_nominal_power * model.fc_nominal_power
+    return model.fc_off_power== fc_off_to_nominal_power * model.fc_nominal_power
 model.fc_off_power_fraction = pe.Constraint(rule=fc_off_power_fraction)
 
 def real_fc_power(model, t):
     if t == ti:
-        return model.fc_power[t] == (model.fc_nominal_power*model.fc_use_factor[t]*model.fc_on[t]) - (model.fc_nominal_power*model.fc_use_factor[t]*fc_TUP*fc_off_init)
+        return model.fc_power_part[t] == (model.fc_use_factor[t]*model.fc_on[t]) - (model.fc_use_factor[t]*fc_TUP*fc_off_init)
     else:
-        return model.fc_power[t] == (model.fc_nominal_power*model.fc_use_factor[t]*model.fc_on[t]) - (model.fc_nominal_power*model.fc_use_factor[t]*fc_TUP*model.fc_off[t-1])
+        return model.fc_power_part[t] == (model.fc_use_factor[t]*model.fc_on[t]) - (model.fc_use_factor[t]*fc_TUP*model.fc_off[t-1])
 model.real_fc_power = pe.Constraint(model.time, rule=real_fc_power)
+
+def real_real_fc_power(model, t):
+    return model.fc_power[t] == model.fc_power_part[t]*model.fc_nominal_power
+model.real_real_fc_power = pe.Constraint(model.time, rule=real_real_fc_power)
 
 def fc_consumption(model, t):
     return model.fc_cons[t] == model.fc_SB_power*model.fc_SB[t] + model.fc_off[t]*model.fc_off_power
@@ -244,13 +254,17 @@ model.we_off_power_fraction = pe.Constraint(rule=we_off_power_fraction)
 
 def real_we_power(model, t):
     if t == ti:
-        return model.we_power[t] == (model.we_nominal_power*model.we_use_factor[t]*model.we_on[t]) - (model.we_nominal_power*model.we_use_factor[t]*we_TUP*we_off_init)
+        return model.we_power[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*we_off_init)
     else:
-        return model.we_power[t] == (model.we_nominal_power*model.we_use_factor[t]*model.we_on[t]) - (model.we_nominal_power*model.we_use_factor[t]*we_TUP*model.we_off[t-1])
+        return model.we_power[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*model.we_off[t-1])
 model.real_we_power = pe.Constraint(model.time, rule=real_we_power)
 
+def real_real_we_power(model, t):
+    return model.we_power[t] == model.we_power_part[t]*model.we_nominal_power
+model.real_real_we_power = pe.Constraint(model.time, rule=real_real_we_power)
+
 def we_consumption(model, t):
-    return model.we_cons[t] == model.we_nominal_power*model.we_use_factor[t]*model.we_on[t] + model.we_SB_power*model.we_SB[t] + model.we_off[t]*model.we_off_power
+    return model.we_cons[t] == model.we_power[t] + model.we_SB_power*model.we_SB[t] + model.we_off[t]*model.we_off_power
 model.we_consumption = pe.Constraint(model.time, rule=we_consumption)
 
 def we_state(model, t):
@@ -292,7 +306,7 @@ def actual_energy_hydrotank(model, t):
     if t == ti:
         return model.actual_energy_ht[t] == actual_energy_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
     else:
-        return model.actual_energy_ht[t] == model.actual_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.we_on[t]*model.we_power[t]*model.we_off[t-1]*we_TUP/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+        return model.actual_energy_ht[t] == model.actual_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
 model.actual_energy_hydrotank = pe.Constraint(model.time, rule=actual_energy_hydrotank)
 
 def actual_energy_limits_hydrotank_1(model, t):
@@ -315,7 +329,8 @@ def final_cost(model):
 model.final_cost = pe.Constraint(rule=final_cost)
 
 solver = po.SolverFactory('gurobi')
+solver.options['NonConvex'] = 2
 status = solver.solve(model)
 
-print(pe.value(model.actual_energy_bat_init))
+print(pe.value(model.bat_capa))
 print("solved")
