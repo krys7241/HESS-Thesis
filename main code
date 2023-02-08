@@ -254,9 +254,9 @@ model.we_off_power_fraction = pe.Constraint(rule=we_off_power_fraction)
 
 def real_we_power(model, t):
     if t == ti:
-        return model.we_power[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*we_off_init)
+        return model.we_power_part[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*we_off_init)
     else:
-        return model.we_power[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*model.we_off[t-1])
+        return model.we_power_part[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*model.we_off[t-1])
 model.real_we_power = pe.Constraint(model.time, rule=real_we_power)
 
 def real_real_we_power(model, t):
