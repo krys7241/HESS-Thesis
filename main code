@@ -35,10 +35,12 @@ charge_efficiency = 0.95
 discharge_efficiency = 0.95
 ti = 0
 tf = len(loads) - 1
-SOC_init_bat = 0.5
+'''bat_capa = 200'''
+'''SOC_init_bat = 0.5'''
+'''actual_energy_init_bat = 0.5*bat_capa'''
+actual_energy_init_bat = 100
 max_charge = 167
 max_discharge = 500
-'''bat_capa = 200'''
 bat_cost_kWh = 6
 '''we_power_nominal = 0.08
 we_power_SB = 0.001
@@ -64,8 +66,10 @@ fc_on_init = 0
 fc_SB_init = 0
 fc_off_init = 1
 fc_efficiency = 0.5
-SOC_init_ht = 0.5
+'''SOC_init_ht = 0.5'''
 '''ht_capacity = 16.5'''
+'''actual_energy_init_ht = 0.5*ht_capacity'''
+actual_energy_init_ht = 9
 ht_cost_kg = 6
 
 model = pe.ConcreteModel()
@@ -74,7 +78,9 @@ model.time = pe.RangeSet(ti, tf)
 
 '''batterie'''
 
-model.SOC_bat = pe.Var(model.time, domain=pe.Reals, bounds=(0.2, 0.95))
+'''model.SOC_bat = pe.Var(model.time, domain=pe.Reals, bounds=(0.2, 0.95))'''
+'''model.actual_energy_init_bat = pe.Var(domain=pe.NonNegativeReals)'''
+model.actual_energy_bat = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.bat_charge = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.bat_charge_state = pe.Var(model.time, domain=pe.Binary)
 model.bat_discharge = pe.Var(model.time, domain=pe.NonNegativeReals)
@@ -90,9 +96,9 @@ model.fc_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.fc_on = pe.Var(model.time, domain=pe.Binary)
 model.fc_SB = pe.Var(model.time, domain=pe.Binary)
 model.fc_off = pe.Var(model.time, domain=pe.Binary)
-model.fc_nominal_power = pe.Var(domain=pe.Binary)
-model.fc_SB_power = pe.Var(domain=pe.Binary)
-model.fc_off_power = pe.Var(domain=pe.Binary)
+model.fc_nominal_power = pe.Var(domain=pe.NonNegativeReals)
+model.fc_SB_power = pe.Var(domain=pe.NonNegativeReals)
+model.fc_off_power = pe.Var(domain=pe.NonNegativeReals)
 model.fc_cost = pe.Var(domain=pe.NonNegativeReals)
 
 '''water electrolyser'''
@@ -103,14 +109,16 @@ model.we_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.we_on = pe.Var(model.time, domain=pe.Binary)
 model.we_SB = pe.Var(model.time, domain=pe.Binary)
 model.we_off = pe.Var(model.time, domain=pe.Binary)
-model.we_nominal_power = pe.Var(domain=pe.Binary)
-model.we_SB_power = pe.Var(domain=pe.Binary)
-model.we_off_power = pe.Var(domain=pe.Binary)
+model.we_nominal_power = pe.Var(domain=pe.NonNegativeReals)
+model.we_SB_power = pe.Var(domain=pe.NonNegativeReals)
+model.we_off_power = pe.Var(domain=pe.NonNegativeReals)
 model.we_cost = pe.Var(domain=pe.NonNegativeReals)
 
 '''hydrogen tank'''
 
-model.SOC_ht = pe.Var(model.time, domain=pe.Reals, bounds=(0.2, 0.95))
+'''model.SOC_ht = pe.Var(model.time, domain=pe.Reals, bounds=(0.2, 0.95))'''
+'''model.actual_energy_init_ht = pe.Var(domain=pe.NonNegativeReals)'''
+model.actual_energy_ht = pe.Var(model.time, domain=pe.Reals)
 model.ht_capa = pe.Var(domain=pe.NonNegativeReals)
 model.ht_cost = pe.Var(domain=pe.NonNegativeReals)
 
@@ -133,12 +141,33 @@ def charge_discharge(model, t):
     return model.bat_charge_state[t] + model.bat_discharge_state[t] <= 1
 model.charge_discharge = pe.Constraint(model.time, rule=charge_discharge)
 
+'''
 def SOC_batterie(model, t):
     if t == ti:
         return model.SOC_bat[t] == SOC_init_bat + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency/model.bat_capa) + (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency/model.bat_capa)
     else:
         return model.SOC_bat[t] == model.SOC_bat[t-1] + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency/model.bat_capa) + (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency/model.bat_capa)
 model.SOC_batterie = pe.Constraint(model.time, rule=SOC_batterie)
+'''
+
+def actual_energy_limits_batterie_1(model, t):
+    return model.actual_energy_bat[t] >= 0.2 * model.bat_capa
+model.actual_energy_limits_batterie_1 = pe.Constraint(model.time, rule=actual_energy_limits_batterie_1)
+
+def actual_energy_limits_batterie_2(model, t):
+    return model.actual_energy_bat[t] <= 0.95 * model.bat_capa
+model.actual_energy_limits_batterie_2 = pe.Constraint(model.time, rule=actual_energy_limits_batterie_2)
+
+'''def actual_energy_batterie_init(model):
+    return model.actual_energy_init_bat == 0.5 * model.bat_capa
+model.actual_energy_batterie_init = pe.Constraint(model.time, rule=actual_energy_batterie_init)'''
+
+def actual_energy_batterie(model, t):
+    if t == ti:
+        return model.actual_energy_bat[t] == actual_energy_init_bat + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency) + (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency)
+    else:
+        return model.actual_energy_bat[t] == model.actual_energy_bat[t-1] + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency) + (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency)
+model.actual_energy_batterie = pe.Constraint(model.time, rule=actual_energy_batterie)
 
 def max_bat_charge(model, t):
     return 0 <= model.bat_charge[t]
@@ -214,7 +243,10 @@ def we_off_power_fraction(model):
 model.we_off_power_fraction = pe.Constraint(rule=we_off_power_fraction)
 
 def real_we_power(model, t):
-    return model.we_power[t] == model.we_nominal_power*model.we_use_factor[t]*model.we_on[t]
+    if t == ti:
+        return model.we_power[t] == (model.we_nominal_power*model.we_use_factor[t]*model.we_on[t]) - (model.we_nominal_power*model.we_use_factor[t]*we_TUP*we_off_init)
+    else:
+        return model.we_power[t] == (model.we_nominal_power*model.we_use_factor[t]*model.we_on[t]) - (model.we_nominal_power*model.we_use_factor[t]*we_TUP*model.we_off[t-1])
 model.real_we_power = pe.Constraint(model.time, rule=real_we_power)
 
 def we_consumption(model, t):
@@ -245,12 +277,32 @@ model.we_final_cost = pe.Constraint(rule=we_final_cost)
 
 '''hydrogen tank'''
 
-def SOC_hydrotank(model, t):
+'''def actual_energy_hydrotank_init(model):
+    return model.actual_energy_init_ht == 0.5 * model.ht_capa
+model.actual_energy_hydrotank_init = pe.Constraint(model.time, rule=actual_energy_hydrotank_init)'''
+
+'''def SOC_hydrotank(model, t):
     if t == ti:
         return model.SOC_ht[t] == SOC_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency/model.ht_capa) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency/model.ht_capa)
     else:
         return model.SOC_ht[t] == model.SOC_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency/model.ht_capa) - (model.we_on[t]*model.we_power[t]*model.we_off[t-1]*we_TUP/we_efficiency/model.ht_capa) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency/model.ht_capa)
-model.SOC_hydrotank = pe.Constraint(model.time, rule=SOC_hydrotank)
+model.SOC_hydrotank = pe.Constraint(model.time, rule=SOC_hydrotank)'''
+
+def actual_energy_hydrotank(model, t):
+    if t == ti:
+        return model.actual_energy_ht[t] == actual_energy_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+    else:
+        return model.actual_energy_ht[t] == model.actual_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.we_on[t]*model.we_power[t]*model.we_off[t-1]*we_TUP/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+model.actual_energy_hydrotank = pe.Constraint(model.time, rule=actual_energy_hydrotank)
+
+def actual_energy_limits_hydrotank_1(model, t):
+    return model.actual_energy_bat[t] >= 0.2 * model.ht_capa
+model.actual_energy_limits_hydrotank_1 = pe.Constraint(model.time, rule=actual_energy_limits_hydrotank_1)
+
+def actual_energy_limits_hydrotank_2(model, t):
+    return model.actual_energy_bat[t] <= 0.95 * model.ht_capa
+model.actual_energy_limits_hydrotank_2 = pe.Constraint(model.time, rule=actual_energy_limits_hydrotank_2)
+
 
 def ht_final_cost(model):
     return model.ht_cost == ht_cost_kg * model.ht_capa
@@ -265,5 +317,5 @@ model.final_cost = pe.Constraint(rule=final_cost)
 solver = po.SolverFactory('gurobi')
 status = solver.solve(model)
 
-print(pe.value(model.SOC_bat_init))
+print(pe.value(model.actual_energy_bat_init))
 print("solved")
