@@ -33,7 +33,7 @@ wind_power_kW = [wind_power_data/1000 for wind_power_data in wind_power]
 df = pd.DataFrame(list(zip(Loads, sun, wind, sun_power_kW, wind_power_kW)), columns=['Load (kW)', 'Radiation (Wh/m2)', 'Wind speed (m/s)', 'PV Power (kW)', 'WT Power (kW)'])
 df.to_excel('Results.xlsx', sheet_name='Results')
 
-loads = [loads_kW/1000 for loads_kW in Loads]
+loads = [loads_kW*1000 for loads_kW in Loads]
 production = [s + w for s, w in zip(sun_power, wind_power)]
 charge_efficiency = 0.95
 discharge_efficiency = 0.95
