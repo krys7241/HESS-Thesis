@@ -310,11 +310,11 @@ def actual_energy_hydrotank(model, t):
 model.actual_energy_hydrotank = pe.Constraint(model.time, rule=actual_energy_hydrotank)
 
 def actual_energy_limits_hydrotank_1(model, t):
-    return model.actual_energy_bat[t] >= 0.2 * model.ht_capa
+    return model.actual_energy_ht[t] >= 0.2 * model.ht_capa
 model.actual_energy_limits_hydrotank_1 = pe.Constraint(model.time, rule=actual_energy_limits_hydrotank_1)
 
 def actual_energy_limits_hydrotank_2(model, t):
-    return model.actual_energy_bat[t] <= 0.95 * model.ht_capa
+    return model.actual_energy_ht[t] <= 0.95 * model.ht_capa
 model.actual_energy_limits_hydrotank_2 = pe.Constraint(model.time, rule=actual_energy_limits_hydrotank_2)
 
 
