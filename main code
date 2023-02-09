@@ -309,9 +309,9 @@ model.SOC_hydrotank = pe.Constraint(model.time, rule=SOC_hydrotank)'''
 
 def actual_energy_hydrotank(model, t):
     if t == ti:
-        return model.actual_energy_ht[t] == actual_energy_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+        return model.actual_energy_ht[t] == actual_energy_init_ht + (model.we_on[t]*model.we_power[t]*we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
     else:
-        return model.actual_energy_ht[t] == model.actual_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+        return model.actual_energy_ht[t] == model.actual_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]*we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
 model.actual_energy_hydrotank = pe.Constraint(model.time, rule=actual_energy_hydrotank)
 
 def actual_energy_limits_hydrotank_1(model, t):
