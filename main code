@@ -30,9 +30,6 @@ sun_power_kW = [sun_power_data/1000 for sun_power_data in sun_power]
 wind_power = [(wind_speed**3)*wt_surface*wt_number*rho_air*wt_efficiency for wind_speed in wind]
 wind_power_kW = [wind_power_data/1000 for wind_power_data in wind_power]
 
-df = pd.DataFrame(list(zip(Loads, sun, wind, sun_power_kW, wind_power_kW)), columns=['Load (kW)', 'Radiation (Wh/m2)', 'Wind speed (m/s)', 'PV Power (kW)', 'WT Power (kW)'])
-df.to_excel('Results.xlsx', sheet_name='Results')
-
 loads = [loads_kW*1000 for loads_kW in Loads]
 production = [s + w for s, w in zip(sun_power, wind_power)]
 charge_efficiency = 0.95
@@ -42,7 +39,7 @@ tf = len(loads) - 1
 '''bat_capa = 200'''
 '''SOC_init_bat = 0.5'''
 '''actual_energy_init_bat = 0.5*bat_capa'''
-actual_energy_init_bat = 100
+actual_energy_init_bat = 100000
 max_charge = 167
 max_discharge = 500
 bat_cost_kWh = 6
@@ -89,7 +86,7 @@ model.bat_charge = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.bat_charge_state = pe.Var(model.time, domain=pe.Binary)
 model.bat_discharge = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.bat_discharge_state = pe.Var(model.time, domain=pe.Binary)
-model.bat_capa = pe.Var(domain=pe.NonNegativeReals)
+model.bat_capa = pe.Var(initialize=200000, domain=pe.NonNegativeReals)
 model.bat_cost = pe.Var(domain=pe.NonNegativeReals)
 
 '''fuel cell'''
@@ -101,7 +98,7 @@ model.fc_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.fc_on = pe.Var(model.time, domain=pe.Binary)
 model.fc_SB = pe.Var(model.time, domain=pe.Binary)
 model.fc_off = pe.Var(model.time, domain=pe.Binary)
-model.fc_nominal_power = pe.Var(domain=pe.NonNegativeReals)
+model.fc_nominal_power = pe.Var(initialize=120, domain=pe.NonNegativeReals)
 model.fc_SB_power = pe.Var(domain=pe.NonNegativeReals)
 model.fc_off_power = pe.Var(domain=pe.NonNegativeReals)
 model.fc_cost = pe.Var(domain=pe.NonNegativeReals)
@@ -115,7 +112,7 @@ model.we_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.we_on = pe.Var(model.time, domain=pe.Binary)
 model.we_SB = pe.Var(model.time, domain=pe.Binary)
 model.we_off = pe.Var(model.time, domain=pe.Binary)
-model.we_nominal_power = pe.Var(domain=pe.NonNegativeReals)
+model.we_nominal_power = pe.Var(initialize=80, domain=pe.NonNegativeReals)
 model.we_SB_power = pe.Var(domain=pe.NonNegativeReals)
 model.we_off_power = pe.Var(domain=pe.NonNegativeReals)
 model.we_cost = pe.Var(domain=pe.NonNegativeReals)
@@ -125,7 +122,7 @@ model.we_cost = pe.Var(domain=pe.NonNegativeReals)
 '''model.SOC_ht = pe.Var(model.time, domain=pe.Reals, bounds=(0.2, 0.95))'''
 '''model.actual_energy_init_ht = pe.Var(domain=pe.NonNegativeReals)'''
 model.actual_energy_ht = pe.Var(model.time, domain=pe.Reals)
-model.ht_capa = pe.Var(domain=pe.NonNegativeReals)
+model.ht_capa = pe.Var(initialize=17, domain=pe.NonNegativeReals)
 model.ht_cost = pe.Var(domain=pe.NonNegativeReals)
 
 
@@ -170,9 +167,9 @@ model.actual_energy_batterie_init = pe.Constraint(model.time, rule=actual_energy
 
 def actual_energy_batterie(model, t):
     if t == ti:
-        return model.actual_energy_bat[t] == actual_energy_init_bat + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency) + (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency)
+        return model.actual_energy_bat[t] == actual_energy_init_bat + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency) - (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency)
     else:
-        return model.actual_energy_bat[t] == model.actual_energy_bat[t-1] + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency) + (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency)
+        return model.actual_energy_bat[t] == model.actual_energy_bat[t-1] + (model.bat_charge_state[t]*model.bat_charge[t]*charge_efficiency) - (model.bat_discharge_state[t]*model.bat_discharge[t]/discharge_efficiency)
 model.actual_energy_batterie = pe.Constraint(model.time, rule=actual_energy_batterie)
 
 def max_bat_charge(model, t):
@@ -188,7 +185,7 @@ def max_bat_discharge(model, t):
 model.max_bat_discharge = pe.Constraint(model.time, rule=max_bat_discharge)
 
 def max_bat_discharge_2(model, t):
-    return model.bat_charge[t] <= max_discharge
+    return model.bat_discharge[t] <= max_discharge
 model.max_bat_discharge_2 = pe.Constraint(model.time, rule=max_bat_discharge_2)
 
 def bat_final_cost(model):
@@ -202,8 +199,12 @@ def fc_SB_power_fraction(model):
 model.fc_SB_power_fraction = pe.Constraint(rule=fc_SB_power_fraction)
 
 def fc_off_power_fraction(model):
-    return model.fc_off_power== fc_off_to_nominal_power * model.fc_nominal_power
+    return model.fc_off_power == fc_off_to_nominal_power * model.fc_nominal_power
 model.fc_off_power_fraction = pe.Constraint(rule=fc_off_power_fraction)
+
+def fc_use_factor_limits(model, t):
+    return model.fc_use_factor[t] <= model.fc_on[t]
+model.fc_use_factor_limits = pe.Constraint(model.time, rule=fc_use_factor_limits)
 
 def real_fc_power(model, t):
     if t == ti:
@@ -252,6 +253,10 @@ def we_off_power_fraction(model):
     return model.we_off_power == we_off_to_nominal_power * model.we_nominal_power
 model.we_off_power_fraction = pe.Constraint(rule=we_off_power_fraction)
 
+def we_use_factor_limits(model, t):
+    return model.we_use_factor[t] <= model.we_on[t]
+model.we_use_factor_limits = pe.Constraint(model.time, rule=we_use_factor_limits)
+
 def real_we_power(model, t):
     if t == ti:
         return model.we_power_part[t] == (model.we_use_factor[t]*model.we_on[t]) - (model.we_use_factor[t]*we_TUP*we_off_init)
@@ -264,7 +269,7 @@ def real_real_we_power(model, t):
 model.real_real_we_power = pe.Constraint(model.time, rule=real_real_we_power)
 
 def we_consumption(model, t):
-    return model.we_cons[t] == model.we_power[t] + model.we_SB_power*model.we_SB[t] + model.we_off[t]*model.we_off_power
+    return model.we_cons[t] == (model.we_power[t]*model.we_on[t]) + (model.we_SB_power*model.we_SB[t]) + (model.we_off[t]*model.we_off_power)
 model.we_consumption = pe.Constraint(model.time, rule=we_consumption)
 
 def we_state(model, t):
@@ -330,7 +335,51 @@ model.final_cost = pe.Constraint(rule=final_cost)
 
 solver = po.SolverFactory('gurobi')
 solver.options['NonConvex'] = 2
+solver.options['Method'] = 0
+solver.options['MIPFocus'] = 3
+solver.options['Presolve'] = 2
+solver.options['MIPGap'] = 0.05
 status = solver.solve(model)
 
+'''data export'''
+
+actual_energy_bat_data = []
+for t in range(ti, tf+1):
+    actual_energy_bat_data.append(pe.value(model.actual_energy_bat[t]))
+
+bat_charge_data = []
+for t in range(ti, tf+1):
+    bat_charge_data.append(pe.value(model.bat_charge[t]))
+
+bat_discharge_data = []
+for t in range(ti, tf+1):
+    bat_discharge_data.append(pe.value(model.bat_discharge[t]))
+
+we_cons_data = []
+for t in range(ti, tf+1):
+    we_cons_data.append(pe.value(model.we_cons[t]))
+
+fc_cons_data = []
+for t in range(ti, tf+1):
+    fc_cons_data.append(pe.value(model.fc_cons[t]))
+
+fc_power_data = []
+for t in range(ti, tf+1):
+    fc_power_data.append(pe.value(model.fc_power[t]))
+
+curtailments_data = []
+for t in range(ti, tf+1):
+    curtailments_data.append(pe.value(model.curtailment[t]))
+
+actual_energy_ht_data = []
+for t in range(ti, tf+1):
+    actual_energy_ht_data.append(pe.value(model.actual_energy_ht[t]))
+
+df = pd.DataFrame(list(zip(Loads, sun, wind, sun_power_kW, wind_power_kW, production, actual_energy_bat_data, bat_charge_data, bat_discharge_data, we_cons_data, fc_cons_data, fc_power_data, curtailments_data, actual_energy_bat_data)), columns=['Load (kW)', 'Radiation (Wh/m2)', 'Wind speed (m/s)', 'PV Power (kW)', 'WT Power (kW)', 'energy production (W)', 'energy in bat (W)', 'battery charging (W)', 'battery discharging (W)', 'we consumption (W)', 'fc consumption (W)', 'fc production (W)', 'curtailments (W)', 'hydrogene in ht (kg)'])
+df.to_excel('Results.xlsx', sheet_name='Results')
+
 print(pe.value(model.bat_capa))
+print(pe.value(model.ht_capa))
+print(pe.value(model.fc_nominal_power))
+print(pe.value(model.we_nominal_power))
 print("solved")
