@@ -1,0 +1,528 @@
+import pyomo.environ as pe
+import pyomo.opt as po
+import pandas as pd
+from parameters2 import *
+
+'''import and conversion of datas from excel to list'''
+
+elec_load = pd.read_excel("GEP_consumption_aggregated.xlsx")
+radiation = pd.read_excel("50.88_4.29_radiation.xlsx")
+wind_speed = pd.read_excel("50.88_4.29_wind_speed_100m.xlsx")
+
+Load = elec_load['Consumer_0'].tolist()
+sun = radiation['Radiation (W/mÂ²)'].tolist()
+wind = wind_speed['Wind speed (m/s)'].tolist()
+
+Load = Load[0:1000]
+sun = sun[0:1000]
+wind = wind[0:1000]
+
+'''define lenght of the list'''
+
+ti = 0
+tf = len(Load) - 1
+
+'''creation of model'''
+
+model = pe.ConcreteModel()
+
+model.time = pe.RangeSet(ti, tf)
+
+'''variable related to renewable energy sources'''
+model.pv_power = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.pv_quantity = pe.Var(domain=pe.NonNegativeIntegers)
+model.pv_cost = pe.Var(domain=pe.NonNegativeReals)
+model.wt_power = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.wt_quantity = pe.Var(domain=pe.NonNegativeIntegers)
+model.wt_cost = pe.Var(domain=pe.NonNegativeReals)
+
+
+'''variable related to batterie'''
+
+model.state_of_energy_bat = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.bat_charge = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.bat_charge_state = pe.Var(model.time, domain=pe.Binary)
+model.bat_discharge = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.bat_discharge_state = pe.Var(model.time, domain=pe.Binary)
+model.bat_size = pe.Var(domain=pe.NonNegativeReals, initialize=300)
+model.bat_cost = pe.Var(domain=pe.NonNegativeReals)
+model.bat_replacement_cost = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.bat_total_replacement_cost = pe.Var(domain=pe.NonNegativeReals)
+model.bat_total_cost = pe.Var(domain=pe.NonNegativeReals)
+
+state_of_energy_init_bat = bat_initial_state_of_energy * model.bat_size
+kW_charged_and_discharged_in_battery_before_replacement = bat_number_of_cycle_in_life_time * 2 * (bat_max_state_of_energy - bat_min_state_of_energy)
+
+
+'''variable related to fuel cell'''
+
+model.fc_load_factor = pe.Var(model.time, domain=pe.NonNegativeReals)
+'''fc_power_part has no phisical interpretation and is just used to avoid a bug'''
+model.fc_power_part = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.fc_power = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.fc_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.fc_on = pe.Var(model.time, domain=pe.Binary)
+model.fc_SB = pe.Var(model.time, domain=pe.Binary)
+model.fc_off = pe.Var(model.time, domain=pe.Binary)
+model.fc_nominal_power = pe.Var(domain=pe.NonNegativeReals, initialize=150)
+model.fc_SB_power = pe.Var(domain=pe.NonNegativeReals)
+model.fc_off_power = pe.Var(domain=pe.NonNegativeReals)
+model.fc_cost = pe.Var(domain=pe.NonNegativeReals)
+
+'''variable related to water electrolyser'''
+
+model.we_load_factor = pe.Var(model.time, domain=pe.NonNegativeReals)
+'''we_power_part has no phisical interpretation and is just used to avoid a bug'''
+model.we_power_part = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.we_power = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.we_cons = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.we_on = pe.Var(model.time, domain=pe.Binary)
+model.we_SB = pe.Var(model.time, domain=pe.Binary)
+model.we_off = pe.Var(model.time, domain=pe.Binary)
+model.we_nominal_power = pe.Var(domain=pe.NonNegativeReals, initialize=150)
+model.we_SB_power = pe.Var(domain=pe.NonNegativeReals)
+model.we_off_power = pe.Var(domain=pe.NonNegativeReals)
+model.we_cost = pe.Var(domain=pe.NonNegativeReals)
+
+'''variable related to hydrogen tank'''
+
+model.state_of_energy_ht = pe.Var(model.time, domain=pe.Reals)
+model.ht_size = pe.Var(domain=pe.NonNegativeReals, initialize=80)
+model.ht_cost = pe.Var(domain=pe.NonNegativeReals)
+
+state_of_energy_init_ht = ht_initial_state_of_energy * model.ht_size
+
+'''other variable in the model'''
+
+model.curtailment = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.cost = pe.Var(domain=pe.NonNegativeReals)
+model.curtailment_sell_cost = pe.Var(domain=pe.NonNegativeReals)
+model.production = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.difference = pe.Var(model.time, domain=pe.Reals)
+
+
+obj_expr = model.cost
+model.obj = pe.Objective(expr=obj_expr, sense=pe.minimize)
+
+'''renewable energy sources'''
+
+def pv_total_cost(model):
+    return model.pv_cost == model.pv_quantity * pv_cost_per_quantity
+model.pv_total_cost = pe.Constraint(rule=pv_total_cost)
+
+def wt_total_cost(model):
+    return model.wt_cost == model.wt_quantity * wt_cost_per_quantity
+model.wt_total_cost = pe.Constraint(rule=wt_total_cost)
+
+'''conversion of data about radiation in power'''
+
+def solar_power(model, t):
+    return model.pv_power[t] == sun[t]*pv_efficiency*pv_area*model.pv_quantity/1000
+model.solar_power = pe.Constraint(model.time, rule=solar_power)
+
+'''conversion of data about wind speed in power (the adjustemet are made to better match the power profile of a Enercon E-82 E4 3.000'''
+
+def wind_power(model, t):
+    if wind[t] < wt_min_speed:
+        return model.wt_power[t] == 0
+    if wind[t] > wt_rated_speed:
+        return model.wt_power[t] == wt_rated_power
+    else:
+        return model.wt_power[t] == (model.wt_quantity*wt_rated_power*(wind[t]-wt_min_speed))/(wt_rated_speed-wt_min_speed)
+model.wind_power = pe.Constraint(model.time, rule=wind_power)
+
+'''production and the difference between the production and load'''
+
+def energy_production(model, t):
+    return model.production[t] == model.wt_power[t] + model.pv_power[t]
+model.energy_production = pe.Constraint(model.time, rule=energy_production)
+
+def diff(model, t):
+    return model.difference[t] == Load[t] + model.production[t]
+model.diff = pe.Constraint(model.time, rule=diff)
+
+'''energie'''
+
+def energy_balance(model, t):
+    return Load[t] == model.production[t] - (model.bat_charge_state[t] * model.bat_charge[t]) + (model.bat_discharge_state[t] * model.bat_discharge[t]) - model.we_cons[t] - model.fc_cons[t] + model.fc_power[t] - model.curtailment[t]
+model.energy_balance = pe.Constraint(model.time, rule=energy_balance)
+
+'''curtailments'''
+
+def curtailment_benefit(model):
+    curtailment_total = 0
+    for t in range(ti, tf + 1):
+       curtailment_total = curtailment_total + model.curtailment[t]
+    return model.curtailment_sell_cost == curtailment_total * energy_sell_cost
+model.curtailment_benefit = pe.Constraint(rule=curtailment_benefit)
+
+'''constrain linked to batterie'''
+
+'''no charge and discharge in same time'''
+
+def charge_discharge(model, t):
+    return model.bat_charge_state[t] + model.bat_discharge_state[t] <= 1
+model.charge_discharge = pe.Constraint(model.time, rule=charge_discharge)
+
+'''limit energy in batterie'''
+
+def minimum_state_of_energy_batterie(model, t):
+    return model.state_of_energy_bat[t] >= bat_min_state_of_energy * model.bat_size
+model.minimum_state_of_energy_batterie = pe.Constraint(model.time, rule=minimum_state_of_energy_batterie)
+
+def maximum_state_of_energy_batterie(model, t):
+    return model.state_of_energy_bat[t] <= bat_max_state_of_energy * model.bat_size
+model.maximum_state_of_energy_batterie = pe.Constraint(model.time, rule=maximum_state_of_energy_batterie)
+
+'''define the state of energy in batterie (same a the SOC but without dividing by the size because it caused a bug)'''
+
+def state_of_energy_batterie(model, t):
+    if t == ti:
+        return model.state_of_energy_bat[t] == state_of_energy_init_bat + (model.bat_charge_state[t]*model.bat_charge[t]*bat_charge_efficiency) - (model.bat_discharge_state[t]*model.bat_discharge[t]/bat_discharge_efficiency)
+    else:
+        return model.state_of_energy_bat[t] == model.state_of_energy_bat[t-1] + (model.bat_charge_state[t]*model.bat_charge[t]*bat_charge_efficiency) - (model.bat_discharge_state[t]*model.bat_discharge[t]/bat_discharge_efficiency)
+model.state_of_energy_batterie = pe.Constraint(model.time, rule=state_of_energy_batterie)
+
+'''limite charge and discharge of the batterie'''
+
+def min_bat_charge(model, t):
+    return 0 <= model.bat_charge[t]
+model.min_bat_charge = pe.Constraint(model.time, rule=min_bat_charge)
+
+def max_bat_charge(model, t):
+    return model.bat_charge[t] <= bat_max_charge * model.bat_size * model.bat_charge_state[t]
+model.max_bat_charge = pe.Constraint(model.time, rule=max_bat_charge)
+
+def min_bat_discharge(model, t):
+    return 0 <= model.bat_discharge[t]
+model.min_bat_discharge = pe.Constraint(model.time, rule=min_bat_discharge)
+
+def max_bat_discharge(model, t):
+    return model.bat_discharge[t] <= bat_max_discharge * model.bat_size * model.bat_discharge_state[t]
+model.max_bat_discharge = pe.Constraint(model.time, rule=max_bat_discharge)
+
+'''cost of the batterie'''
+
+def battery_cost(model):
+    return model.bat_cost == bat_cost_kWh * model.bat_size
+model.battery_cost = pe.Constraint(rule=battery_cost)
+
+'''taking into account that the battery will have to be replaced after a certain number of charge and ddischarge cycle'''
+
+def battery_replacement_cost(model, t):
+    return model.bat_replacement_cost[t] == (bat_cost_kWh / kW_charged_and_discharged_in_battery_before_replacement) * (model.bat_charge[t] + model.bat_charge[t])
+model.battery_replacement_cost = pe.Constraint(model.time, rule=battery_replacement_cost)
+
+def battery_total_replacement_cost(model):
+    bat_final_replacement_cost = 0
+    for t in range(ti, tf + 1):
+       bat_final_replacement_cost = bat_final_replacement_cost + model.bat_replacement_cost[t]
+    return model.bat_total_replacement_cost == bat_final_replacement_cost
+model.battery_total_replacement_cost = pe.Constraint(rule=battery_total_replacement_cost)
+
+''' final cost of the batterie'''
+
+def battery_total_cost(model):
+    return model.bat_total_cost == model.bat_cost + model.bat_total_replacement_cost
+model.battery_total_cost = pe.Constraint(rule=battery_total_cost)
+
+'''constraint linked to the fuel cell'''
+
+'''fraction of power in stand-by'''
+
+def fc_SB_power_fraction(model):
+    return model.fc_SB_power == fc_SB_to_nominal_power * model.fc_nominal_power
+model.fc_SB_power_fraction = pe.Constraint(rule=fc_SB_power_fraction)
+
+'''fraction of power in off'''
+
+def fc_off_power_fraction(model):
+    return model.fc_off_power == fc_off_to_nominal_power * model.fc_nominal_power
+model.fc_off_power_fraction = pe.Constraint(rule=fc_off_power_fraction)
+
+'''limite the load factore'''
+
+def fc_load_factor_limits1(model, t):
+    return model.fc_load_factor[t] >= fc_MPL*model.fc_on[t]
+model.fc_load_factor_limits1 = pe.Constraint(model.time, rule=fc_load_factor_limits1)
+
+def fc_load_factor_limits2(model, t):
+    return model.fc_load_factor[t] <= 1*model.fc_on[t]
+model.fc_load_factor_limits2 = pe.Constraint(model.time, rule=fc_load_factor_limits2)
+
+'''power produced by the fuel cell (calculed in 2 step to avoid a bug)'''
+
+def real_fc_power(model, t):
+    if t == ti:
+        return model.fc_power_part[t] == (model.fc_load_factor[t]*model.fc_on[t]) - (model.fc_load_factor[t]*fc_TUP*fc_off_init)
+    else:
+        return model.fc_power_part[t] == (model.fc_load_factor[t]*model.fc_on[t]) - (model.fc_load_factor[t]*fc_TUP*model.fc_off[t-1])
+model.real_fc_power = pe.Constraint(model.time, rule=real_fc_power)
+
+def real_real_fc_power(model, t):
+    return model.fc_power[t] == model.fc_power_part[t]*model.fc_nominal_power
+model.real_real_fc_power = pe.Constraint(model.time, rule=real_real_fc_power)
+
+'''fuel cell consumption'''
+
+def fc_consumption(model, t):
+    return model.fc_cons[t] == model.fc_SB_power*model.fc_SB[t] + model.fc_off[t]*model.fc_off_power
+model.fc_consumption = pe.Constraint(model.time, rule=fc_consumption)
+
+'''fuel cell can be on, off, or in stand-by but only one at time'''
+
+def fc_state(model, t):
+    return model.fc_on[t]+model.fc_SB[t]+model.fc_off[t] == 1
+model.fc_state = pe.Constraint(model.time, rule=fc_state)
+
+'''avoid passing directly from off to stand-by'''
+
+def fc_off_to_SB(model, t):
+    if t == ti:
+        return model.fc_SB[t] + fc_off_init <= 1
+    else:
+        return model.fc_SB[t] + model.fc_off[t-1] <= 1
+model.fc_off_to_SB = pe.Constraint(model.time, rule=fc_off_to_SB)
+
+'''avoid passing directly from stand-by to off'''
+
+def fc_SB_to_off(model, t):
+    if t == ti:
+        return model.fc_off[t] + fc_SB_init <= 1
+    else:
+        return model.fc_off[t] + model.fc_SB[t-1] <= 1
+model.fc_SB_to_off = pe.Constraint(model.time, rule=fc_SB_to_off)
+
+'''cost of fuel cell'''
+
+def fc_final_cost(model):
+    return model.fc_cost == fc_cost_kW * model.fc_nominal_power
+model.fc_final_cost = pe.Constraint(rule=fc_final_cost)
+
+'''constraint linked to water electrolyser'''
+
+'''fraction of power in stand-by'''
+
+def we_SB_power_fraction(model):
+    return model.we_SB_power == we_SB_to_nominal_power * model.we_nominal_power
+model.we_SB_power_fraction = pe.Constraint(rule=we_SB_power_fraction)
+
+'''fraction of power in off'''
+
+def we_off_power_fraction(model):
+    return model.we_off_power == we_off_to_nominal_power * model.we_nominal_power
+model.we_off_power_fraction = pe.Constraint(rule=we_off_power_fraction)
+
+'''limite the load factore'''
+
+def we_load_factor_limits1(model, t):
+    return model.we_load_factor[t] >= we_MPL*model.we_on[t]
+model.we_load_factor_limits1 = pe.Constraint(model.time, rule=we_load_factor_limits1)
+
+def we_load_factor_limits2(model, t):
+    return model.we_load_factor[t] <= 1*model.we_on[t]
+model.we_load_factor_limits2 = pe.Constraint(model.time, rule=we_load_factor_limits2)
+
+'''power consumed by the electrolizer if it is on to produce hydrogen (calculed in 2 step to avoid a bug)'''
+
+def real_we_power(model, t):
+    if t == ti:
+        return model.we_power_part[t] == (model.we_load_factor[t]*model.we_on[t]) - (model.we_load_factor[t]*we_TUP*we_off_init)
+    else:
+        return model.we_power_part[t] == (model.we_load_factor[t]*model.we_on[t]) - (model.we_load_factor[t]*we_TUP*model.we_off[t-1])
+model.real_we_power = pe.Constraint(model.time, rule=real_we_power)
+
+def real_real_we_power(model, t):
+    return model.we_power[t] == model.we_power_part[t]*model.we_nominal_power
+model.real_real_we_power = pe.Constraint(model.time, rule=real_real_we_power)
+
+'''power consumed by the electrolizer'''
+
+def we_consumption(model, t):
+    return model.we_cons[t] == (model.we_power[t]*model.we_on[t]) + (model.we_SB_power*model.we_SB[t]) + (model.we_off[t]*model.we_off_power)
+model.we_consumption = pe.Constraint(model.time, rule=we_consumption)
+
+'''elecrolizer can be on, off, or in stand-by but only one at time'''
+
+def we_state(model, t):
+    return model.we_on[t]+model.we_SB[t]+model.we_off[t] == 1
+model.we_state = pe.Constraint(model.time, rule=we_state)
+
+'''avoid passing directly from off to stand-by'''
+
+def we_off_to_SB(model, t):
+    if t == ti:
+        return model.we_SB[t] + we_off_init <= 1
+    else:
+        return model.we_SB[t] + model.we_off[t-1] <= 1
+model.we_off_to_SB = pe.Constraint(model.time, rule=we_off_to_SB)
+
+'''avoid passing directly from stand-by to off'''
+
+def we_SB_to_off(model, t):
+    if t == ti:
+        return model.we_off[t] + we_SB_init <= 1
+    else:
+        return model.we_off[t] + model.we_SB[t-1] <= 1
+model.we_SB_to_off = pe.Constraint(model.time, rule=we_SB_to_off)
+
+'''cost of elecrolyzer'''
+
+def we_final_cost(model):
+    return model.we_cost == we_cost_kW * model.we_nominal_power
+model.we_final_cost = pe.Constraint(rule=we_final_cost)
+
+
+'''hydrogen tank'''
+
+'''define the state of energy in hydrogen tank (same a the SOC but without dividing by the size because it caused a bug)'''
+'''here even if its called energy the value is calculed in kg'''
+
+def state_of_energy_hydrogen_tank(model, t):
+    if t == ti:
+        return model.state_of_energy_ht[t] == state_of_energy_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+    else:
+        return model.state_of_energy_ht[t] == model.state_of_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+model.state_of_energy_hydrogen_tank = pe.Constraint(model.time, rule=state_of_energy_hydrogen_tank)
+
+'''limit the hydrogen inside hydrogene tank'''
+
+
+def minimum_state_of_energy_hydrogen_tank(model, t):
+    return ht_min_state_of_energy * model.ht_size <= model.state_of_energy_ht[t]
+model.minimum_state_of_energy_hydrogen_tank = pe.Constraint(model.time, rule=minimum_state_of_energy_hydrogen_tank)
+
+
+def maximum_state_of_energy_hydrogen_tank(model, t):
+    return model.state_of_energy_ht[t] <= ht_max_state_of_energy * model.ht_size
+model.maximum_state_of_energy_hydrogen_tank = pe.Constraint(model.time, rule=maximum_state_of_energy_hydrogen_tank)
+
+'''cost of hydrogen tank'''
+
+def ht_final_cost(model):
+    return model.ht_cost == ht_cost_kg * model.ht_size
+model.ht_final_cost = pe.Constraint(rule=ht_final_cost)
+
+'''objective'''
+
+def final_cost(model):
+    return model.cost == model.bat_cost + model.ht_cost + model.fc_cost + model.we_cost + model.pv_cost + model.wt_cost - model.curtailment_sell_cost
+model.final_cost = pe.Constraint(rule=final_cost)
+
+'''solving'''
+
+solver = po.SolverFactory('gurobi')
+solver.options['NonConvex'] = 2
+solver.options['Method'] = 0
+solver.options['MIPFocus'] = 3
+solver.options['Presolve'] = 2
+solver.options['MIPGap'] = 0.05
+status = solver.solve(model)
+
+'''data export'''
+
+difference_data = []
+for t in range(ti, tf+1):
+    difference_data.append(pe.value(model.difference[t]))
+
+production_data = []
+for t in range(ti, tf+1):
+    production_data.append(pe.value(model.production[t]))
+
+pv_power_data = []
+for t in range(ti, tf+1):
+    pv_power_data.append(pe.value(model.pv_power[t]))
+
+wt_power_data = []
+for t in range(ti, tf+1):
+    wt_power_data.append(pe.value(model.wt_power[t]))
+
+state_of_energy_bat_data = []
+for t in range(ti, tf+1):
+    state_of_energy_bat_data.append(pe.value(model.state_of_energy_bat[t]))
+
+bat_charge_data = []
+for t in range(ti, tf+1):
+    bat_charge_data.append(pe.value(model.bat_charge[t]))
+
+bat_discharge_data = []
+for t in range(ti, tf+1):
+    bat_discharge_data.append(pe.value(model.bat_discharge[t]))
+
+bat_charge_state_data = []
+for t in range(ti, tf+1):
+    bat_charge_state_data.append(pe.value(model.bat_charge_state[t]))
+
+bat_discharge_state_data = []
+for t in range(ti, tf+1):
+    bat_discharge_state_data.append(pe.value(model.bat_discharge_state[t]))
+
+we_cons_data = []
+for t in range(ti, tf+1):
+    we_cons_data.append(pe.value(model.we_cons[t]))
+
+we_power_data = []
+for t in range(ti, tf+1):
+    we_power_data.append(pe.value(model.we_power[t]))
+
+we_load_factor = []
+for t in range(ti, tf+1):
+    we_load_factor.append(pe.value(model.we_load_factor[t]))
+
+we_on_data = []
+for t in range(ti, tf+1):
+    we_on_data.append(pe.value(model.we_on[t]))
+
+we_off_data = []
+for t in range(ti, tf+1):
+    we_off_data.append(pe.value(model.we_off[t]))
+
+we_SB_data = []
+for t in range(ti, tf + 1):
+    we_SB_data.append(pe.value(model.we_SB[t]))
+
+fc_cons_data = []
+for t in range(ti, tf+1):
+    fc_cons_data.append(pe.value(model.fc_cons[t]))
+
+fc_power_data = []
+for t in range(ti, tf+1):
+    fc_power_data.append(pe.value(model.fc_power[t]))
+
+fc_load_factor = []
+for t in range(ti, tf+1):
+    fc_load_factor.append(pe.value(model.fc_load_factor[t]))
+
+fc_on_data = []
+for t in range(ti, tf+1):
+    fc_on_data.append(pe.value(model.fc_on[t]))
+
+fc_off_data = []
+for t in range(ti, tf+1):
+    fc_off_data.append(pe.value(model.fc_off[t]))
+
+fc_SB_data = []
+for t in range(ti, tf + 1):
+    fc_SB_data.append(pe.value(model.fc_SB[t]))
+
+curtailments_data = []
+for t in range(ti, tf+1):
+    curtailments_data.append(pe.value(model.curtailment[t]))
+
+state_of_energy_ht_data = []
+for t in range(ti, tf+1):
+    state_of_energy_ht_data.append(pe.value(model.state_of_energy_ht[t]))
+
+df = pd.DataFrame(list(zip(Load, sun, wind, pv_power_data, wt_power_data, production_data, difference_data, state_of_energy_bat_data, bat_charge_data, bat_discharge_data, bat_charge_state_data, bat_discharge_state_data, we_cons_data, we_power_data, we_load_factor, we_on_data, we_off_data, we_SB_data, fc_cons_data, fc_power_data, fc_load_factor, fc_on_data, fc_off_data, fc_SB_data, curtailments_data, state_of_energy_ht_data)), columns=['Load (kW)', 'Radiation (Wh/m2)', 'Wind speed (m/s)', 'PV Power (kW)', 'WT Power (kW)', 'energy production (W)', 'diff (W)', 'energy in bat (W)', 'battery charging (W)', 'battery discharging (W)', 'battery charge state', 'battery discharge state', 'we consumption (W)', 'we production (W)', 'we load factor', 'we on', 'we off', 'we SB', 'fc consumption (W)', 'fc production (W)',  'fc load factor', 'fc on', 'fc off', 'fc SB', 'curtailments (W)', 'hydrogene in ht (kg)'])
+df.to_excel('Results.xlsx', sheet_name='Results')
+
+'''printing some value'''
+
+print(pe.value(model.bat_size))
+print(pe.value(model.ht_size))
+print(pe.value(model.pv_quantity))
+print(pe.value(model.wt_quantity))
+print(pe.value(model.fc_nominal_power))
+print(pe.value(model.we_nominal_power))
+print("solved")
+print(pe.value(model.cost))
