@@ -13,10 +13,6 @@ Load = elec_load['Consumer_0'].tolist()
 sun = radiation['Radiation (W/mÂ²)'].tolist()
 wind = wind_speed['Wind speed (m/s)'].tolist()
 
-Load = Load[0:1000]
-sun = sun[0:1000]
-wind = wind[0:1000]
-
 '''define lenght of the list'''
 
 ti = 0
