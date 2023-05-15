@@ -1,7 +1,7 @@
 '''paramaters related to renewable energy sources (pv for photovoltaic and wt for wind turbine)'''
 
 pv_efficiency = 0.2
-pv_area = 1
+pv_area = 1.5
 pv_cost_per_quantity = 500
 
 wt_rated_power = 800
