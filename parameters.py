@@ -23,7 +23,7 @@ bat_number_of_cycle_in_life_time = 4000
 
 '''data related to water electrolizer'''
 
-we_cost_kW = 1400
+we_cost_kW = 1500
 we_SB_to_nominal_power = 0.02
 we_off_to_nominal_power = 0.005
 we_TUP = 0.5
@@ -35,7 +35,7 @@ we_efficiency = 52
 
 '''data related to fuel cell'''
 
-fc_cost_kW = 500
+fc_cost_kW = 1800
 fc_SB_to_nominal_power = 0.02
 fc_off_to_nominal_power = 0.005
 fc_TUP = 0.25
@@ -47,7 +47,7 @@ fc_efficiency = 20
 
 '''data related to hydrogen tank'''
 
-ht_cost_kg = 1600
+ht_cost_kg = 450
 ht_min_state_of_energy = 0.2
 ht_max_state_of_energy = 0.95
 ht_initial_state_of_energy = 0.3

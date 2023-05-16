@@ -1,7 +1,7 @@
 import pyomo.environ as pe
 import pyomo.opt as po
 import pandas as pd
-from parameters2 import *
+from parameters import *
 
 '''import and conversion of datas from excel to list'''
 
@@ -40,6 +40,7 @@ difference = [l - p for l, p in zip(Load, production)]
 
 ti = 0
 tf = len(Load) - 1
+
 
 '''creation of model'''
 
@@ -187,7 +188,7 @@ model.battery_total_replacement_cost = pe.Constraint(rule=battery_total_replacem
 ''' final cost of the batterie'''
 
 def battery_total_cost(model):
-    return model.bat_total_cost == model.bat_cost + model.bat_total_replacement_cost
+    return model.bat_total_cost == model.bat_cost
 model.battery_total_cost = pe.Constraint(rule=battery_total_cost)
 
 '''constraint linked to the fuel cell'''
@@ -208,16 +209,16 @@ model.fc_off_power_fraction = pe.Constraint(rule=fc_off_power_fraction)
 
 def fc_minimum_power(model, t):
     if t == ti:
-       return model.fc_power[t] >= model.fc_nominal_power * fc_MPL * model.fc_on[t] - ((1 - fc_TUP) * fc_off_init * model.fc_nominal_power)
+       return model.fc_power[t] >= model.fc_nominal_power * fc_MPL * model.fc_on[t]
     else:
-        return model.fc_power[t] >= model.fc_nominal_power * fc_MPL * model.fc_on[t] - ((1 - fc_TUP) * model.fc_off[t-1] * model.fc_nominal_power)
+        return model.fc_power[t] >= model.fc_nominal_power * fc_MPL * model.fc_on[t]
 model.fc_minimum_power = pe.Constraint(model.time, rule=fc_minimum_power)
 
 def fc_maximum_power(model, t):
     if t == ti:
-       return model.fc_power[t] <= model.fc_nominal_power * model.fc_on[t] - ((1 - fc_TUP) * fc_off_init * model.fc_nominal_power)
+       return model.fc_power[t] <= model.fc_nominal_power * model.fc_on[t] 
     else:
-        return model.fc_power[t] <= model.fc_nominal_power * model.fc_on[t] - ((1 - fc_TUP) * model.fc_off[t-1] * model.fc_nominal_power)
+        return model.fc_power[t] <= model.fc_nominal_power * model.fc_on[t]
 model.fc_maximum_power = pe.Constraint(model.time, rule=fc_maximum_power)
 
 '''fuel cell consumption'''
@@ -274,16 +275,16 @@ model.we_off_power_fraction = pe.Constraint(rule=we_off_power_fraction)
 
 def we_minimum_power(model, t):
     if t == ti:
-       return model.we_power[t] >= model.we_nominal_power * we_MPL * model.we_on[t] - ((1 - we_TUP) * we_off_init * model.we_nominal_power)
+       return model.we_power[t] >= model.we_nominal_power * we_MPL * model.we_on[t] 
     else:
         return model.we_power[t] >= model.we_nominal_power * we_MPL * model.we_on[t] - ((1 - we_TUP) * model.we_off[t-1] * model.we_nominal_power)
 model.we_minimum_power = pe.Constraint(model.time, rule=we_minimum_power)
 
 def we_maximum_power(model, t):
     if t == ti:
-       return model.we_power[t] <= model.we_nominal_power * model.we_on[t] - (1 - we_TUP * we_off_init * model.we_nominal_power)
+       return model.we_power[t] <= model.we_nominal_power * model.we_on[t] 
     else:
-        return model.we_power[t] <= model.we_nominal_power * model.we_on[t] - (1 - we_TUP * model.we_off[t-1] * model.we_nominal_power)
+        return model.we_power[t] <= model.we_nominal_power * model.we_on[t]
 model.we_maximum_power = pe.Constraint(model.time, rule=we_maximum_power)
 
 '''power consumed by the electrolizer'''
@@ -330,9 +331,9 @@ model.we_final_cost = pe.Constraint(rule=we_final_cost)
 
 def state_of_energy_hydrogen_tank(model, t):
     if t == ti:
-        return model.state_of_energy_ht[t] == state_of_energy_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+        return model.state_of_energy_ht[t] == state_of_energy_init_ht + (model.we_on[t]*model.we_power[t]/we_efficiency - model.we_on[t]*we_off_init/we_efficiency*we_TUP) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
     else:
-        return model.state_of_energy_ht[t] == model.state_of_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
+        return model.state_of_energy_ht[t] == model.state_of_energy_ht[t-1] + (model.we_on[t]*model.we_power[t]/we_efficiency - model.we_on[t]*model.we_off[t-1]/we_efficiency*we_TUP) - (model.fc_on[t]*model.fc_power[t]/fc_efficiency)
 model.state_of_energy_hydrogen_tank = pe.Constraint(model.time, rule=state_of_energy_hydrogen_tank)
 
 '''limit the hydrogen inside hydrogene tank'''
@@ -356,7 +357,7 @@ model.ht_final_cost = pe.Constraint(rule=ht_final_cost)
 '''objective'''
 
 def final_cost(model):
-    return model.cost == model.bat_cost + model.ht_cost + model.fc_cost + model.we_cost - model.curtailment_sell_cost
+    return model.cost == model.bat_cost + model.ht_cost + model.fc_cost + model.we_cost
 model.final_cost = pe.Constraint(rule=final_cost)
 
 '''solving'''
@@ -364,10 +365,11 @@ model.final_cost = pe.Constraint(rule=final_cost)
 solver = po.SolverFactory('gurobi')
 solver.options['NonConvex'] = 2
 solver.options['Method'] = 0
+solver.options["Heuristics"] = 0.1
 solver.options['MIPFocus'] = 3
 solver.options['Presolve'] = 2
 solver.options['MIPGap'] = 0.05
-status = solver.solve(model)
+status = solver.solve(model, tee=True)
 
 '''data export'''
 
