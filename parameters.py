@@ -54,4 +54,4 @@ ht_initial_state_of_energy = 0.3
 
 '''price of energy'''
 
-energy_sell_cost = 0.3
+energy_sell_cost = 0.03
