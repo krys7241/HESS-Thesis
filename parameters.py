@@ -11,11 +11,19 @@ wt_number = 3
 
 '''data related to batterie'''
 
+'''economical (in euro per kWh)'''
+bat_cost_kWh = 800
+
+'''environmental (in kgCO2eq per kWh)'''
+'''bat_cost_kWh = 3.58'''
+
+'''environmental for 2030 (in kgCO2eq per kWh)'''
+'''bat_cost_kWh = 2.22'''
+
 bat_charge_efficiency = 0.95
 bat_discharge_efficiency = 0.95
 bat_max_charge = 0.5
 bat_max_discharge = 0.5
-bat_cost_kWh = 800
 bat_min_state_of_energy = 0.2
 bat_max_state_of_energy = 0.95
 bat_initial_state_of_energy = 0.5
@@ -23,7 +31,15 @@ bat_number_of_cycle_in_life_time = 4000
 
 '''data related to water electrolizer'''
 
+'''economical (in euro per kW)'''
 we_cost_kW = 1500
+
+'''environmental (in kgCO2eq per kW)'''
+'''we_cost_kW = 38.02'''
+
+'''environmental for 2030 (in kgCO2eq per kW)'''
+'''we_cost_kW = 21.26'''
+
 we_SB_to_nominal_power = 0.02
 we_off_to_nominal_power = 0.005
 we_TUP = 0.5
@@ -35,7 +51,15 @@ we_efficiency = 52
 
 '''data related to fuel cell'''
 
+'''economical (in euro per kW)'''
 fc_cost_kW = 1800
+
+'''environmental (in kgCO2eq per kW)'''
+'''fc_cost_kW = 95.37'''
+
+'''environmental for 2030 (in kgCO2eq per kW)'''
+'''fc_cost_kW = 52.85'''
+
 fc_SB_to_nominal_power = 0.02
 fc_off_to_nominal_power = 0.005
 fc_TUP = 0.25
@@ -47,11 +71,26 @@ fc_efficiency = 20
 
 '''data related to hydrogen tank'''
 
+'''economical (in euro per kg)'''
 ht_cost_kg = 450
+
+'''environmental (in kgCO2eq per kg)'''
+'''ht_cost_kg = 1118.32'''
+
+'''environmental for 2030 (in kgCO2eq per kg)'''
+'''ht_cost_kg = 671.9'''
+
 ht_min_state_of_energy = 0.2
 ht_max_state_of_energy = 0.95
 ht_initial_state_of_energy = 0.3
 
 '''price of energy'''
 
+'''economical (in euro per kw)'''
 energy_sell_cost = 0.03
+
+'''environmental (in kgCO2eq per kW)'''
+'''energy_sell_cost = 0.65'''
+
+'''environmental for 2030 (in kgCO2eq per kW)'''
+'''energy_sell_cost = 0.17'''
