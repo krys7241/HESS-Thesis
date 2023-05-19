@@ -99,8 +99,6 @@ state_of_energy_initial_ht = ht_initial_state_of_energy * model.ht_size
 '''other variable in the model'''
 
 model.curtailment = pe.Var(model.time, domain=pe.NonNegativeReals)
-model.cost = pe.Var(domain=pe.NonNegativeReals)
-model.curtailment_sell_cost = pe.Var(domain=pe.NonNegativeReals)
 
 obj_expr = model.cost
 model.obj = pe.Objective(expr=obj_expr, sense=pe.minimize)
@@ -113,15 +111,6 @@ def energy_balance(model, t):
     else:
        return Load[t] == production[t] - (model.bat_charge_state[t] * model.bat_charge[t]) + (model.bat_discharge_state[t] * model.bat_discharge[t]) - model.we_cons[t] - model.fc_cons[t] + model.fc_power[t]*(1 - fc_TUP * model.fc_off[t-1]) - model.curtailment[t]
 model.energy_balance = pe.Constraint(model.time, rule=energy_balance)
-
-'''curtailments'''
-
-#def curtailment_benefit(model):
-#    curtailment_total = 0
-#    for t in range(ti, tf + 1):
-#       curtailment_total = curtailment_total + model.curtailment[t]
-#    return model.curtailment_sell_cost == curtailment_total * energy_sell_cost
-#model.curtailment_benefit = pe.Constraint(rule=curtailment_benefit)
 
 '''constrain linked to batterie'''
 
