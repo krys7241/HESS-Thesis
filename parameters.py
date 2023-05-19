@@ -83,14 +83,3 @@ ht_cost_kg = 671.9
 ht_min_state_of_energy = 0.2
 ht_max_state_of_energy = 0.95
 ht_initial_state_of_energy = 0.3
-
-'''price of energy'''
-
-'''economical (in euro per kw)'''
-energy_sell_cost = 0.03
-
-'''environmental (in kgCO2eq per kW)'''
-'''energy_sell_cost = 0.65'''
-
-'''environmental for 2030 (in kgCO2eq per kW)'''
-'''energy_sell_cost = 0.17'''
