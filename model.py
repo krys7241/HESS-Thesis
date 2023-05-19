@@ -99,6 +99,7 @@ state_of_energy_initial_ht = ht_initial_state_of_energy * model.ht_size
 '''other variable in the model'''
 
 model.curtailment = pe.Var(model.time, domain=pe.NonNegativeReals)
+model.cost = pe.Var(domain=pe.NonNegativeReals)
 
 obj_expr = model.cost
 model.obj = pe.Objective(expr=obj_expr, sense=pe.minimize)
