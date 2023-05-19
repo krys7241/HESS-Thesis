@@ -75,10 +75,10 @@ fc_efficiency = 20
 ht_cost_kg = 450
 
 '''environmental (in kgCO2eq per kg)'''
-'''ht_cost_kg = 1118.32'''
+ht_cost_kg = 1118.32
 
 '''environmental for 2030 (in kgCO2eq per kg)'''
-'''ht_cost_kg = 671.9'''
+ht_cost_kg = 671.9
 
 ht_min_state_of_energy = 0.2
 ht_max_state_of_energy = 0.95

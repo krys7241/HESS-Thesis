@@ -1,7 +1,7 @@
 import pyomo.environ as pe
 import pyomo.opt as po
 import pandas as pd
-from parameters2 import *
+from parameters import *
 
 '''import and conversion of datas from excel to list'''
 
@@ -116,12 +116,12 @@ model.energy_balance = pe.Constraint(model.time, rule=energy_balance)
 
 '''curtailments'''
 
-def curtailment_benefit(model):
-    curtailment_total = 0
-    for t in range(ti, tf + 1):
-       curtailment_total = curtailment_total + model.curtailment[t]
-    return model.curtailment_sell_cost == curtailment_total * energy_sell_cost
-model.curtailment_benefit = pe.Constraint(rule=curtailment_benefit)
+#def curtailment_benefit(model):
+#    curtailment_total = 0
+#    for t in range(ti, tf + 1):
+#       curtailment_total = curtailment_total + model.curtailment[t]
+#    return model.curtailment_sell_cost == curtailment_total * energy_sell_cost
+#model.curtailment_benefit = pe.Constraint(rule=curtailment_benefit)
 
 '''constrain linked to batterie'''
 
@@ -347,7 +347,7 @@ model.ht_final_cost = pe.Constraint(rule=ht_final_cost)
 '''objective'''
 
 def final_cost(model):
-    return model.cost == model.bat_cost + model.ht_cost + model.fc_cost + model.we_cost - model.curtailment_sell_cost
+    return model.cost == model.bat_cost + model.ht_cost + model.fc_cost + model.we_cost
 model.final_cost = pe.Constraint(rule=final_cost)
 
 '''solving'''
