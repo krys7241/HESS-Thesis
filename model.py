@@ -1,7 +1,7 @@
 import pyomo.environ as pe
 import pyomo.opt as po
 import pandas as pd
-from parameters import *
+from parametrefinal import *
 
 '''import and conversion of datas from excel to list'''
 
@@ -23,13 +23,14 @@ sun_power_kW = [rad*pv_efficiency*pv_area*pv_number/1000 for rad in sun]
 
 '''conversion of data about wind speed in power (the adjustemet are made to better match the power profile of a Enercon E-82 E4 3.000'''
 
-wind_power_kW = [(wt_number*(wt_rated_power*(wind_speed-wt_min_speed))/(wt_rated_speed-wt_min_speed)) for wind_speed in wind]
-for y in range(0, len(wind_power_kW)):
-    if wind_power_kW[y] < 0:
-        wind_power_kW[y] = 0
-for z in range(0, len(wind_power_kW)):
-    if wind_power_kW[z] > wt_rated_power:
-        wind_power_kW[z] = wt_rated_power
+wind_power = [(wt_rated_power*(wind_speed-wt_min_speed)/(wt_rated_speed-wt_min_speed)) for wind_speed in wind]
+for y in range(0, len(wind_power)):
+    if wind_power[y] < 0:
+        wind_power[y] = 0
+for z in range(0, len(wind_power)):
+    if wind_power[z] > wt_rated_power:
+        wind_power[z] = wt_rated_power
+wind_power_kW = [wind_pow * wt_number for wind_pow in wind_power]
 
 '''creating a list with load, production and the difference between the two'''
 
@@ -56,13 +57,8 @@ model.bat_discharge = pe.Var(model.time, domain=pe.NonNegativeReals)
 model.bat_discharge_state = pe.Var(model.time, domain=pe.Binary)
 model.bat_size = pe.Var(domain=pe.NonNegativeIntegers, initialize=300)
 model.bat_cost = pe.Var(domain=pe.NonNegativeReals)
-model.bat_replacement_cost = pe.Var(model.time, domain=pe.NonNegativeReals)
-model.bat_total_replacement_cost = pe.Var(domain=pe.NonNegativeReals)
-model.bat_total_cost = pe.Var(domain=pe.NonNegativeReals)
 
 state_of_energy_initial_bat = bat_initial_state_of_energy * model.bat_size
-kW_charged_and_discharged_in_battery_before_replacement = bat_number_of_cycle_in_life_time * 2 * (bat_max_state_of_energy - bat_min_state_of_energy)
-
 
 '''variable related to fuel cell'''
 
@@ -163,25 +159,6 @@ model.max_bat_discharge = pe.Constraint(model.time, rule=max_bat_discharge)
 def battery_cost(model):
     return model.bat_cost == bat_cost_kWh * model.bat_size
 model.battery_cost = pe.Constraint(rule=battery_cost)
-
-'''taking into account that the battery will have to be replaced after a certain number of charge and ddischarge cycle'''
-
-def battery_replacement_cost(model, t):
-    return model.bat_replacement_cost[t] == (bat_cost_kWh / kW_charged_and_discharged_in_battery_before_replacement) * (model.bat_charge[t] + model.bat_charge[t])
-model.battery_replacement_cost = pe.Constraint(model.time, rule=battery_replacement_cost)
-
-def battery_total_replacement_cost(model):
-    bat_final_replacement_cost = 0
-    for t in range(ti, tf + 1):
-       bat_final_replacement_cost = bat_final_replacement_cost + model.bat_replacement_cost[t]
-    return model.bat_total_replacement_cost == bat_final_replacement_cost
-model.battery_total_replacement_cost = pe.Constraint(rule=battery_total_replacement_cost)
-
-''' final cost of the batterie'''
-
-def battery_total_cost(model):
-    return model.bat_total_cost == model.bat_cost + model.bat_total_replacement_cost
-model.battery_total_cost = pe.Constraint(rule=battery_total_cost)
 
 '''constraint linked to the fuel cell'''
 
@@ -420,8 +397,8 @@ state_of_energy_ht_data = []
 for t in range(ti, tf+1):
     state_of_energy_ht_data.append(pe.value(model.state_of_energy_ht[t]))
 
-df = pd.DataFrame(list(zip(Load, sun, wind, sun_power_kW, wind_power_kW, production, difference, state_of_energy_bat_data, bat_charge_data, bat_discharge_data, bat_charge_state_data, bat_discharge_state_data, we_cons_data, we_power_data, we_on_data, we_off_data, we_SB_data, fc_cons_data, fc_power_data, fc_on_data, fc_off_data, fc_SB_data, curtailments_data, state_of_energy_ht_data)), columns=['Load (kW)', 'Radiation (Wh/m2)', 'Wind speed (m/s)', 'PV Power (kW)', 'WT Power (kW)', 'energy production (W)', 'diff (W)', 'energy in bat (W)', 'battery charging (W)', 'battery discharging (W)', 'battery charge state', 'battery discharge state', 'we consumption (W)', 'we production (W)', 'we on', 'we off', 'we SB', 'fc consumption (W)', 'fc production (W)',  'fc on', 'fc off', 'fc SB', 'curtailments (W)', 'hydrogene in ht (kg)'])
-df.to_excel('Results.xlsx', sheet_name='Results')
+df = pd.DataFrame(list(zip(Load, sun, wind, sun_power_kW, wind_power_kW, production, difference, state_of_energy_bat_data, bat_charge_data, bat_discharge_data, bat_charge_state_data, bat_discharge_state_data, we_cons_data, we_power_data, we_on_data, we_off_data, we_SB_data, fc_cons_data, fc_power_data, fc_on_data, fc_off_data, fc_SB_data, curtailments_data, state_of_energy_ht_data)), columns=['Load (kW)', 'Radiation (Wh/m2)', 'Wind speed (m/s)', 'PV Power (kW)', 'WT Power (kW)', 'energy production (kW)', 'diff (kW)', 'energy in bat (kW)', 'battery charging (kW)', 'battery discharging (kW)', 'battery charge state', 'battery discharge state', 'we consumption (kW)', 'we production (kW)', 'we on', 'we off', 'we SB', 'fc consumption (kW)', 'fc production (kW)',  'fc on', 'fc off', 'fc SB', 'curtailments (kW)', 'hydrogene in ht (kg)'])
+df.to_excel('Resultsplscc.xlsx', sheet_name='Resultsplscc')
 
 '''printing some value'''
 
